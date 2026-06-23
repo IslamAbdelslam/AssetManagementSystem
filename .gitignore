@@ -1,0 +1,57 @@
+# ── Python ─────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ────────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Environment secrets ─────────────────────────────────────────────────────────
+.env
+# NOTE: .env.example IS committed intentionally — it is the public template.
+
+# ── Keys / Certs ───────────────────────────────────────────────────────────────
+*.pem
+*.key
+private.pem
+public.pem
+
+# ── IDE / Editor ───────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Testing ────────────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ── Type checking ──────────────────────────────────────────────────────────────
+.mypy_cache/
+
+# ── Linting ────────────────────────────────────────────────────────────────────
+.ruff_cache/
+
+# ── Docker ─────────────────────────────────────────────────────────────────────
+# (docker-compose.yml and Dockerfile are committed)
+
+# ── Alembic ────────────────────────────────────────────────────────────────────
+# versions are committed; only ignore local scratch
+alembic/versions/*.pyc
+
+# ── Logs ───────────────────────────────────────────────────────────────────────
+*.log
+logs/
