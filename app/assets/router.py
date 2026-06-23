@@ -9,21 +9,18 @@ import uuid
 from typing import Annotated
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Depends, Query, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import schemas
 from app.assets.service import AssetService
 from app.auth.models import User
 from app.auth.service import get_current_user, require_role
-from app.config import get_settings
-from app.core.exceptions import NotFoundError, ServiceUnavailableError
+from app.core.exceptions import NotFoundError
 from app.core.pagination import PageParams, PagedResponse
 from app.database import get_db, get_redis
 
 router = APIRouter()
-settings = get_settings()
 
 
 def _svc(db: AsyncSession, user: User) -> AssetService:
@@ -171,11 +168,9 @@ async def job_status(
         )
 
     # Fallback to DB
+    from app.assets.repository import AssetRepository
     repo = AssetRepository(db, current_user.org_id)
-
-    from app.assets.repository import AssetRepository as AR
-    repo2 = AR(db, current_user.org_id)
-    job = await repo2.get_job(job_id)
+    job = await repo.get_job(job_id)
     if not job:
         raise NotFoundError("Job", str(job_id))
 

@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.assets.models import ASSET_SOURCES, ASSET_STATUSES, ASSET_TYPES
 from app.core.security import sanitize_string, validate_metadata, validate_tags

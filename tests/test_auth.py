@@ -24,11 +24,13 @@ async def test_register_success(client: AsyncClient):
 
 async def test_register_duplicate_slug(client: AsyncClient):
     slug = f"dupslug-{uuid.uuid4().hex[:6]}"
-    payload = lambda email: {
-        "org": {"name": "Dup Org", "slug": slug},
-        "email": email,
-        "password": "SecurePass123!",
-    }
+
+    def payload(email):
+        return {
+            "org": {"name": "Dup Org", "slug": slug},
+            "email": email,
+            "password": "SecurePass123!",
+        }
     await client.post("/api/v1/auth/register", json=payload("first@test.com"))
     resp = await client.post("/api/v1/auth/register", json=payload("second@test.com"))
     assert resp.status_code == 409

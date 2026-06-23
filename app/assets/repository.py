@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any
 
 from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -138,7 +137,6 @@ class AssetRepository:
         return asset, created
 
     async def mark_stale(self, threshold_days: int) -> int:
-        cutoff = datetime.now(timezone.utc)
         result = await self.db.execute(
             update(Asset)
             .where(

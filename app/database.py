@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import asyncio
 from collections import OrderedDict
-from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 import redis.asyncio as aioredis

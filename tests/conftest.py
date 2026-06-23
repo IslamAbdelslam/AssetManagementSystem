@@ -5,13 +5,11 @@ For PostgreSQL-specific features (GIN, upsert), integration tests require a real
 """
 from __future__ import annotations
 
-import asyncio
 import base64
 import os
 import uuid
 from typing import AsyncGenerator
 
-import pytest
 import pytest_asyncio
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa

@@ -60,7 +60,6 @@ class GraphService:
                 )
             )
             for rel in rel_result.scalars().all():
-                edge_key = f"{rel.source_id}:{rel.target_id}:{rel.rel_type}"
                 edges.append(
                     GraphEdge(
                         source=str(rel.source_id),

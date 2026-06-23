@@ -13,7 +13,7 @@ import hashlib
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Literal
+from typing import Annotated
 
 import redis.asyncio as aioredis
 from fastapi import Depends
@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.models import Organization, User
 from app.config import get_settings
 from app.core.exceptions import ForbiddenError, UnauthorizedError
-from app.database import get_db, get_redis
+from app.database import get_db
 
 settings = get_settings()
 
