@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DarkAtlas — Asset Relationship Graph</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0e1a;
+      color: #e2e8f0;
+      font-family: 'Inter', system-ui, sans-serif;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+      background: rgba(10,14,26,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(99,179,237,0.15);
+      padding: 12px 24px;
+      display: flex; align-items: center; gap: 16px;
+    }
+
+    header h1 { font-size: 16px; font-weight: 600; color: #63b3ed; letter-spacing: 0.05em; }
+    header span { font-size: 12px; color: #718096; }
+
+    #token-bar {
+      margin-left: auto; display: flex; align-items: center; gap: 8px;
+    }
+    #token-bar input {
+      background: rgba(255,255,255,0.07); border: 1px solid rgba(99,179,237,0.3);
+      color: #e2e8f0; padding: 6px 12px; border-radius: 6px; font-size: 13px;
+      width: 320px; outline: none;
+    }
+    #token-bar button {
+      background: #2b6cb0; color: #fff; border: none; padding: 6px 14px;
+      border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;
+      transition: background 0.2s;
+    }
+    #token-bar button:hover { background: #3182ce; }
+
+    #svg-container { width: 100vw; height: 100vh; padding-top: 56px; }
+
+    svg { width: 100%; height: 100%; }
+
+    /* Legend */
+    #legend {
+      position: fixed; bottom: 20px; left: 20px;
+      background: rgba(10,14,26,0.88); border: 1px solid rgba(99,179,237,0.15);
+      border-radius: 10px; padding: 12px 16px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #a0aec0; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Tooltip */
+    #tooltip {
+      position: fixed; pointer-events: none;
+      background: rgba(10,14,26,0.95); border: 1px solid rgba(99,179,237,0.25);
+      border-radius: 8px; padding: 10px 14px; font-size: 12px;
+      max-width: 280px; line-height: 1.6; display: none;
+    }
+    #tooltip .tt-title { color: #63b3ed; font-weight: 600; margin-bottom: 4px; }
+    #tooltip .tt-row { color: #a0aec0; }
+
+    #status { position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+      color: #718096; font-size: 13px; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>⬡ DarkAtlas Asset Graph</h1>
+  <span id="stats">— assets</span>
+  <div id="token-bar">
+    <input type="text" id="jwt-input" placeholder="Paste your JWT access token…"/>
+    <button id="load-btn">Load Graph</button>
+  </div>
+</header>
+
+<div id="svg-container"><svg id="graph"></svg></div>
+<div id="tooltip"></div>
+<div id="status">Enter your JWT token and click Load Graph</div>
+
+<div id="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#63b3ed"></div> domain</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#68d391"></div> subdomain</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f6ad55"></div> ip_address</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#fc8181"></div> service</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#b794f4"></div> certificate</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#76e4f7"></div> technology</div>
+</div>
+
+<script>
+const COLOR = {
+  domain: '#63b3ed', subdomain: '#68d391', ip_address: '#f6ad55',
+  service: '#fc8181', certificate: '#b794f4', technology: '#76e4f7'
+};
+const STATUS_OPACITY = { active: 1.0, stale: 0.5, archived: 0.25 };
+
+const svg = d3.select('#graph');
+const container = svg.append('g');
+svg.call(d3.zoom().scaleExtent([0.1, 4]).on('zoom', e => container.attr('transform', e.transform)));
+
+let simulation;
+
+document.getElementById('load-btn').addEventListener('click', loadGraph);
+document.getElementById('jwt-input').addEventListener('keydown', e => { if (e.key === 'Enter') loadGraph(); });
+
+async function loadGraph() {
+  const token = document.getElementById('jwt-input').value.trim();
+  if (!token) { setStatus('Please enter a JWT token.'); return; }
+  setStatus('Loading…');
+  try {
+    const res = await fetch('/api/v1/graph/data', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) { setStatus(`Error ${res.status}: ${res.statusText}`); return; }
+    const data = await res.json();
+    render(data);
+    document.getElementById('stats').textContent =
+      `${data.nodes.length} assets · ${data.edges.length} relationships`;
+    setStatus('');
+  } catch(e) { setStatus('Failed to load: ' + e.message); }
+}
+
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+
+function render({ nodes, edges }) {
+  container.selectAll('*').remove();
+  if (simulation) simulation.stop();
+
+  const W = window.innerWidth, H = window.innerHeight - 56;
+
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+  const links = edges.map(e => ({
+    source: e.source, target: e.target, rel_type: e.rel_type
+  }));
+
+  simulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(90))
+    .force('charge', d3.forceManyBody().strength(-300))
+    .force('center', d3.forceCenter(W / 2, H / 2))
+    .force('collision', d3.forceCollide(28));
+
+  // Links
+  const link = container.append('g').selectAll('line')
+    .data(links).join('line')
+    .attr('stroke', '#2d3748').attr('stroke-width', 1.5)
+    .attr('opacity', 0.7);
+
+  // Link labels
+  const linkLabel = container.append('g').selectAll('text')
+    .data(links).join('text')
+    .text(d => d.rel_type.replace('_', ' '))
+    .attr('font-size', 9).attr('fill', '#4a5568').attr('text-anchor', 'middle');
+
+  // Nodes
+  const node = container.append('g').selectAll('g')
+    .data(nodes).join('g')
+    .attr('cursor', 'pointer')
+    .call(d3.drag()
+      .on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag', (e, d) => { d.fx=e.x; d.fy=e.y; })
+      .on('end', (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; })
+    );
+
+  node.append('circle')
+    .attr('r', d => d.type === 'domain' ? 18 : 13)
+    .attr('fill', d => COLOR[d.type] || '#718096')
+    .attr('opacity', d => STATUS_OPACITY[d.status] || 1)
+    .attr('stroke', '#0a0e1a').attr('stroke-width', 2);
+
+  node.append('text')
+    .text(d => d.value.length > 18 ? d.value.slice(0,16) + '…' : d.value)
+    .attr('text-anchor', 'middle').attr('dy', 28)
+    .attr('font-size', 10).attr('fill', '#a0aec0');
+
+  // Tooltip
+  const tt = document.getElementById('tooltip');
+  node.on('mousemove', (e, d) => {
+    tt.style.display = 'block';
+    tt.style.left = (e.clientX + 14) + 'px';
+    tt.style.top = (e.clientY - 10) + 'px';
+    tt.innerHTML = `<div class="tt-title">${d.value}</div>
+      <div class="tt-row">Type: ${d.type}</div>
+      <div class="tt-row">Status: ${d.status}</div>
+      <div class="tt-row">ID: ${d.id.slice(0,8)}…</div>`;
+  }).on('mouseleave', () => { tt.style.display = 'none'; });
+
+  simulation.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    linkLabel
+      .attr('x', d => (d.source.x + d.target.x) / 2)
+      .attr('y', d => (d.source.y + d.target.y) / 2);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+}
+</script>
+</body>
+</html>
