@@ -40,7 +40,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     hashed_password: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[str] = mapped_column(
-        Enum("admin", "analyst", "readonly", name="user_role_enum"),
+        Enum("admin", "analyst", "readonly", name="user_role_enum", create_type=False),
         nullable=False,
         default="readonly",
     )

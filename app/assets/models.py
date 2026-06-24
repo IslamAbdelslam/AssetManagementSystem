@@ -41,11 +41,11 @@ class Asset(Base):
         index=True,
     )
     type: Mapped[str] = mapped_column(
-        Enum(*ASSET_TYPES, name="asset_type_enum"), nullable=False
+        Enum(*ASSET_TYPES, name="asset_type_enum", create_type=False), nullable=False
     )
     value: Mapped[str] = mapped_column(String(512), nullable=False)
     status: Mapped[str] = mapped_column(
-        Enum(*ASSET_STATUSES, name="asset_status_enum"),
+        Enum(*ASSET_STATUSES, name="asset_status_enum", create_type=False),
         nullable=False,
         default="active",
     )
@@ -56,7 +56,7 @@ class Asset(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
     source: Mapped[str] = mapped_column(
-        Enum(*ASSET_SOURCES, name="asset_source_enum"), nullable=False
+        Enum(*ASSET_SOURCES, name="asset_source_enum", create_type=False), nullable=False
     )
     tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, nullable=False)
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
@@ -131,7 +131,7 @@ class ImportJob(Base):
         index=True,
     )
     status: Mapped[str] = mapped_column(
-        Enum(*JOB_STATUSES, name="job_status_enum"),
+        Enum(*JOB_STATUSES, name="job_status_enum", create_type=False),
         nullable=False,
         default="queued",
     )
