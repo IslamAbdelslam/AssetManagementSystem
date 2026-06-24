@@ -13,12 +13,15 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # ── Enums ──────────────────────────────────────────────────────────────
-    op.execute("CREATE TYPE IF NOT EXISTS user_role_enum AS ENUM ('admin', 'analyst', 'readonly')")
-    op.execute("CREATE TYPE IF NOT EXISTS asset_type_enum AS ENUM ('domain', 'subdomain', 'ip_address', 'service', 'certificate', 'technology')")
-    op.execute("CREATE TYPE IF NOT EXISTS asset_status_enum AS ENUM ('active', 'stale', 'archived')")
-    op.execute("CREATE TYPE IF NOT EXISTS asset_source_enum AS ENUM ('scan', 'import', 'manual')")
-    op.execute("CREATE TYPE IF NOT EXISTS job_status_enum AS ENUM ('queued', 'running', 'done', 'failed')")
+    # ── Enums (idempotent — safe to re-run) ────────────────────────────────
+    for stmt in [
+        "DO $$ BEGIN CREATE TYPE user_role_enum AS ENUM ('admin', 'analyst', 'readonly'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+        "DO $$ BEGIN CREATE TYPE asset_type_enum AS ENUM ('domain', 'subdomain', 'ip_address', 'service', 'certificate', 'technology'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+        "DO $$ BEGIN CREATE TYPE asset_status_enum AS ENUM ('active', 'stale', 'archived'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+        "DO $$ BEGIN CREATE TYPE asset_source_enum AS ENUM ('scan', 'import', 'manual'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+        "DO $$ BEGIN CREATE TYPE job_status_enum AS ENUM ('queued', 'running', 'done', 'failed'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+    ]:
+        op.execute(stmt)
 
     # ── organizations ──────────────────────────────────────────────────────
     op.create_table(
