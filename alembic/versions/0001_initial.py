@@ -14,11 +14,11 @@ depends_on = None
 
 def upgrade() -> None:
     # ── Enums ──────────────────────────────────────────────────────────────
-    op.execute("CREATE TYPE user_role_enum AS ENUM ('admin', 'analyst', 'readonly')")
-    op.execute("CREATE TYPE asset_type_enum AS ENUM ('domain', 'subdomain', 'ip_address', 'service', 'certificate', 'technology')")
-    op.execute("CREATE TYPE asset_status_enum AS ENUM ('active', 'stale', 'archived')")
-    op.execute("CREATE TYPE asset_source_enum AS ENUM ('scan', 'import', 'manual')")
-    op.execute("CREATE TYPE job_status_enum AS ENUM ('queued', 'running', 'done', 'failed')")
+    op.execute("CREATE TYPE IF NOT EXISTS user_role_enum AS ENUM ('admin', 'analyst', 'readonly')")
+    op.execute("CREATE TYPE IF NOT EXISTS asset_type_enum AS ENUM ('domain', 'subdomain', 'ip_address', 'service', 'certificate', 'technology')")
+    op.execute("CREATE TYPE IF NOT EXISTS asset_status_enum AS ENUM ('active', 'stale', 'archived')")
+    op.execute("CREATE TYPE IF NOT EXISTS asset_source_enum AS ENUM ('scan', 'import', 'manual')")
+    op.execute("CREATE TYPE IF NOT EXISTS job_status_enum AS ENUM ('queued', 'running', 'done', 'failed')")
 
     # ── organizations ──────────────────────────────────────────────────────
     op.create_table(
