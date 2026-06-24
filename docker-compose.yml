@@ -61,7 +61,8 @@ services:
       dockerfile: Dockerfile
       target: production
     restart: unless-stopped
-    command: celery -A app.jobs.celery_app worker --loglevel=info --concurrency=4
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["celery -A app.jobs.celery_app worker --loglevel=info --concurrency=4"]
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://darkatlas:${POSTGRES_PASSWORD:-darkatlas_dev_only}@postgres:5432/darkatlas_db
@@ -80,7 +81,8 @@ services:
       dockerfile: Dockerfile
       target: production
     restart: unless-stopped
-    command: celery -A app.jobs.celery_app flower --port=5555
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["celery -A app.jobs.celery_app flower --port=5555"]
     env_file: .env
     environment:
       CELERY_BROKER_URL: redis://redis:6379/1

@@ -33,9 +33,10 @@ COPY --chown=darkatlas:darkatlas app/ ./app/
 COPY --chown=darkatlas:darkatlas alembic/ ./alembic/
 COPY --chown=darkatlas:darkatlas alembic.ini ./
 COPY --chown=darkatlas:darkatlas data/ ./data/
+COPY --chown=darkatlas:darkatlas entrypoint.sh ./entrypoint.sh
 
 USER darkatlas
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
