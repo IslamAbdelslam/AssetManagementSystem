@@ -124,7 +124,6 @@ async def _run_bulk_import(
                 target_id = temp_id_to_uuid.get(target_temp)
                 if source_id and target_id:
                     # Upsert relationship
-                    from sqlalchemy import select
                     from sqlalchemy.dialects.postgresql import insert as pg_insert
                     stmt = pg_insert(AssetRelationship).values(
                         id=uuid.uuid4(),

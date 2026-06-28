@@ -15,6 +15,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
+import bcrypt
 import redis.asyncio as aioredis
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -36,8 +37,6 @@ _bearer = HTTPBearer(auto_error=False)
 
 ALGORITHM = "RS256"
 
-
-import bcrypt
 
 # ── Password helpers ───────────────────────────────────────────────────────────
 def hash_password(plain: str) -> str:

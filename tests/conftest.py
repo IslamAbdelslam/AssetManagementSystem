@@ -7,7 +7,6 @@ from __future__ import annotations
 import base64
 import os
 import uuid
-from functools import lru_cache
 from typing import AsyncGenerator
 
 import pytest_asyncio
