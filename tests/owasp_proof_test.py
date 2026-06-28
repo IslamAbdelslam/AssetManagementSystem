@@ -120,7 +120,7 @@ async def run_owasp_tests():
                 # We check if TenantB's email leaked
                 if "TenantB" in str(data.get("summary", "")) and "email" in str(data.get("summary", "")):
                     safe = False
-            print_result("LLM02: Sensitive Info Disclosure (Cross-Tenant via LLM)", safe, f"AI cannot fetch other tenant's data because of backend ORM scoping.")
+            print_result("LLM02: Sensitive Info Disclosure (Cross-Tenant via LLM)", safe, "AI cannot fetch other tenant's data because of backend ORM scoping.")
 
 if __name__ == "__main__":
     asyncio.run(run_owasp_tests())
