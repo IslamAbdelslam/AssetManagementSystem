@@ -35,20 +35,25 @@ def _gen_rsa_pair():
 
 _PRIV_PEM, _PUB_PEM = _gen_rsa_pair()
 
-# ── Docker Compose connection details ──────────────────────────────────────────
-TEST_DATABASE_URL = "postgresql+asyncpg://darkatlas:darkatlas_dev_only@localhost:5433/darkatlas_test"
-TEST_REDIS_URL = "redis://localhost:6379/15"
+# ── Connection details: prefer env vars already set (e.g. by CI), ─────────────
+# ── fall back to local Docker Compose defaults.                    ─────────────
+TEST_DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql+asyncpg://darkatlas:darkatlas_dev_only@localhost:5433/darkatlas_test",
+)
+TEST_REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/15")
 
 # ── Env setup BEFORE any import of app ────────────────────────────────────────
-os.environ["DATABASE_URL"] = TEST_DATABASE_URL
-os.environ["REDIS_URL"] = TEST_REDIS_URL
-os.environ["CELERY_BROKER_URL"] = "redis://localhost:6379/14"
-os.environ["CELERY_RESULT_BACKEND"] = "redis://localhost:6379/13"
-os.environ["GEMINI_API_KEY"] = "test-key"
+# Only set vars that aren't already provided (CI workflow sets DATABASE_URL etc.)
+os.environ.setdefault("DATABASE_URL", TEST_DATABASE_URL)
+os.environ.setdefault("REDIS_URL", TEST_REDIS_URL)
+os.environ.setdefault("CELERY_BROKER_URL", "redis://localhost:6379/14")
+os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/13")
+os.environ.setdefault("GEMINI_API_KEY", "test-key")
 os.environ["JWT_PRIVATE_KEY_B64"] = base64.b64encode(_PRIV_PEM).decode()
 os.environ["JWT_PUBLIC_KEY_B64"] = base64.b64encode(_PUB_PEM).decode()
-os.environ["APP_ENV"] = "development"
-os.environ["SEED_ON_STARTUP"] = "false"
+os.environ.setdefault("APP_ENV", "development")
+os.environ.setdefault("SEED_ON_STARTUP", "false")
 
 # Clear cached settings so our env vars take effect
 from app.config import get_settings  # noqa: E402
