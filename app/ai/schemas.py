@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class NLQueryRequest(BaseModel):
@@ -33,6 +33,13 @@ class AssetFilterSchema(BaseModel):
     )
     explanation: str = Field(default="", description="LLM explanation of how it interpreted the query")
 
+    @field_validator("metadata_filter", mode="before")
+    @classmethod
+    def allow_none_metadata(cls, v):
+        if v is None:
+            return {}
+        return v
+
 
 class NLQueryResponse(BaseModel):
     query: str
@@ -52,5 +59,5 @@ class SummarizeRequest(BaseModel):
 
 class SummarizeResponse(BaseModel):
     focus: str | None
-    summary: str
+    summary: Any
     asset_counts: dict[str, int]

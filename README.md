@@ -360,21 +360,33 @@ curl "http://localhost:8000/api/v1/assets/<id>/graph?depth=2" \
 **API Response:**
 ```json
 {
-  "items": [
+  "query": "show me all stale certificates",
+  "interpretation": "Filtering for assets of type certificate with a status of stale.",
+  "filter_applied": {
+    "type": "certificate",
+    "status": "stale",
+    "tags": [],
+    "value_contains": null,
+    "source": null,
+    "sort": "last_seen",
+    "order": "desc"
+  },
+  "total_results": 1,
+  "results": [
     {
-      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "id": "e0987703-c772-49bd-87ae-a0cfefac8c9e",
       "type": "certificate",
-      "value": "sha256:abc123def456...",
+      "value": "test-cert",
       "status": "stale",
       "source": "scan",
-      "tags": ["prod", "expired"],
-      "last_seen": "2026-05-10T08:00:00Z",
-      "first_seen": "2025-11-01T00:00:00Z"
+      "tags": [
+        "prod"
+      ],
+      "metadata": {},
+      "first_seen": "2026-06-28T13:49:32.675967+00:00",
+      "last_seen": "2026-06-28T15:47:47.018162+00:00"
     }
-  ],
-  "total": 1,
-  "page": 1,
-  "page_size": 20
+  ]
 }
 ```
 
@@ -395,11 +407,61 @@ curl "http://localhost:8000/api/v1/assets/<id>/graph?depth=2" \
 **API Response:**
 ```json
 {
-  "items": [
-    { "id": "...", "type": "subdomain", "value": "api.acme.io", "status": "active", "tags": ["prod", "api"] },
-    { "id": "...", "type": "service",   "value": "https://api.acme.io:443", "status": "active", "tags": ["prod"] }
-  ],
-  "total": 2
+  "query": "find all assets tagged production",
+  "interpretation": "Filtering for all assets tagged with 'prod' to represent the production context.",
+  "filter_applied": {
+    "type": null,
+    "status": null,
+    "tags": [
+      "prod"
+    ],
+    "value_contains": null,
+    "source": null,
+    "sort": "last_seen",
+    "order": "desc"
+  },
+  "total_results": 3,
+  "results": [
+    {
+      "id": "beef3ab8-8b56-463f-b129-6def93c2cd88",
+      "type": "subdomain",
+      "value": "api.test.com",
+      "status": "active",
+      "source": "scan",
+      "tags": [
+        "prod"
+      ],
+      "metadata": {},
+      "first_seen": "2026-06-28T13:49:32.683741+00:00",
+      "last_seen": "2026-06-28T15:47:47.029459+00:00"
+    },
+    {
+      "id": "e0987703-c772-49bd-87ae-a0cfefac8c9e",
+      "type": "certificate",
+      "value": "test-cert",
+      "status": "stale",
+      "source": "scan",
+      "tags": [
+        "prod"
+      ],
+      "metadata": {},
+      "first_seen": "2026-06-28T13:49:32.675967+00:00",
+      "last_seen": "2026-06-28T15:47:47.018162+00:00"
+    },
+    {
+      "id": "52dcb913-776b-444b-8692-1406b0d0bc1e",
+      "type": "domain",
+      "value": "test-stale.com",
+      "status": "stale",
+      "source": "manual",
+      "tags": [
+        "prod"
+      ],
+      "metadata": {},
+      "first_seen": "2026-06-28T13:49:32.667906+00:00",
+      "last_seen": "2026-06-28T15:47:46.986437+00:00"
+    }
+  ]
 }
 ```
 
@@ -434,13 +496,19 @@ curl "http://localhost:8000/api/v1/assets/<id>/graph?depth=2" \
 
 **Prompt:**
 ```json
-{ "query": "summarize our attack surface" }
+{ "query": "summarize our attack surface", "focus": "general" }
 ```
 
 **API Response:**
 ```json
 {
-  "summary": "Your organization has 47 tracked assets. 12 are currently stale (last seen >30 days ago), including 3 certificates that may have expired. The majority of assets are subdomains (24) and services (15). Production-tagged assets total 31, with 4 stale. Recommend reviewing the 3 stale certificates and rerunning scans on the 8 stale IP addresses."
+  "focus": "general",
+  "summary": "The organization's external attack surface contains an active production subdomain, `api.test.com`. However, security risks are present due to stale production-tagged assets, specifically the domain `test-stale.com` and the certificate `test-cert`. Leaving stale domains and certificates unmanaged in production environments increases the risk of unauthorized access, subdomain takeovers, or security policy lapses.\n\n**Recommended Action:** Conduct a targeted review of the stale domain `test-stale.com` and certificate `test-cert` to either safely decommission them or update their status and configurations.",
+  "asset_counts": {
+    "subdomain": 1,
+    "certificate": 1,
+    "domain": 1
+  }
 }
 ```
 
