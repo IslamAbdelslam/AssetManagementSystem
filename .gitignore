@@ -32,7 +32,8 @@ public.pem
 *.swo
 .DS_Store
 Thumbs.db
-
+AssetManagementSystem.code-workspace
+PROJECT_MAP.md
 # ── Testing ────────────────────────────────────────────────────────────────────
 .pytest_cache/
 .coverage
