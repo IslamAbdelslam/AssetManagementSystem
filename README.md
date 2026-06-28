@@ -18,8 +18,9 @@
 | [Software Design Doc](docs/design/software_design_doc.md) | Layered architecture, module design, data model, security design, RBAC matrix |
 | [System Design](docs/design/system_design.md) | Infrastructure diagram, data flow diagrams, multi-tenancy, scalability |
 | [UML Diagrams](docs/design/uml_diagrams/diagrams.md) | Class, sequence, state, deployment, and component diagrams |
-| [Project Map](PROJECT_MAP.md) | Living architecture reference (tech stack, system flow, tenant isolation) |
+| [Project Map](docs/PROJECT_MAP.md) | Living architecture reference (tech stack, system flow, tenant isolation) |
 | [Benchmark Report](docs/benchmarking/benchmark_report.md) | Bulk import and API load test results |
+| [Learning Guide](docs/LEARNING_GUIDE.md) | Beginner-friendly walkthrough — why every component is where it is |
 
 ---
 
@@ -403,20 +404,21 @@ AssetManagementSystem/
 ├── alembic/                 # Async database migrations
 │   └── versions/            # Migration scripts
 ├── tests/                   # pytest-asyncio · httpx · mocked LLM
-├── docs/benchmarking/        # Locust load tests + benchmark report
 ├── data/                    # sample_dataset.json (60 records)
-├── docs/                    # Design documentation
+├── docs/                    # All documentation
+│   ├── PROJECT_MAP.md       # Living architecture reference
+│   ├── benchmarking/        # Locust load tests + benchmark report
 │   └── design/
 │       ├── software_design_doc.md
 │       ├── system_design.md
-│       └── uml_diagrams/
+│       └── uml_diagrams/diagrams.md
 ├── .github/workflows/
 │   └── ci.yml               # Lint → Type-check → SAST → CVE → Test
 ├── mypy.ini                 # mypy configuration
 ├── pytest.ini               # pytest configuration
 ├── docker-compose.yml       # 5 services: app · postgres · redis · celery · flower
 ├── Dockerfile               # Multi-stage · non-root user
-└── PROJECT_MAP.md           # Living architecture document
+└── entrypoint.sh            # Alembic migrate + uvicorn start
 ```
 
 ---
