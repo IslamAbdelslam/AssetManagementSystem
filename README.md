@@ -331,6 +331,7 @@ curl -X POST http://localhost:8000/api/v1/ai/query \
   -d '{"query": "show me all stale certificates on production subdomains"}'
 ```
 
+
 ### BFS Graph Traversal
 
 ```bash
@@ -340,7 +341,181 @@ curl "http://localhost:8000/api/v1/assets/<id>/graph?depth=2" \
 
 ---
 
-## 🏢 Multi-Tenancy
+## 🤖 AI Examples — Prompts & Outputs
+
+> The AI layer uses **Gemini 2.0 Flash at temperature=0**. The LLM outputs a structured filter — never raw asset data — which is then validated by Pydantic before querying the real database. This prevents hallucinations.
+
+### Example 1 — Filter by status and type
+
+**Prompt:**
+```json
+{ "query": "show me all stale certificates" }
+```
+
+**Gemini generates (internal filter — never shown to user):**
+```json
+{ "type": "certificate", "status": "stale" }
+```
+
+**API Response:**
+```json
+{
+  "items": [
+    {
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "type": "certificate",
+      "value": "sha256:abc123def456...",
+      "status": "stale",
+      "source": "scan",
+      "tags": ["prod", "expired"],
+      "last_seen": "2026-05-10T08:00:00Z",
+      "first_seen": "2025-11-01T00:00:00Z"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+---
+
+### Example 2 — Filter by tag
+
+**Prompt:**
+```json
+{ "query": "find all assets tagged production" }
+```
+
+**Gemini generates:**
+```json
+{ "tags": ["prod"] }
+```
+
+**API Response:**
+```json
+{
+  "items": [
+    { "id": "...", "type": "subdomain", "value": "api.acme.io", "status": "active", "tags": ["prod", "api"] },
+    { "id": "...", "type": "service",   "value": "https://api.acme.io:443", "status": "active", "tags": ["prod"] }
+  ],
+  "total": 2
+}
+```
+
+---
+
+### Example 3 — Filter by value pattern
+
+**Prompt:**
+```json
+{ "query": "show all assets related to api" }
+```
+
+**Gemini generates:**
+```json
+{ "value_contains": "api" }
+```
+
+**API Response:**
+```json
+{
+  "items": [
+    { "type": "subdomain", "value": "api.acme.io",    "status": "active" },
+    { "type": "subdomain", "value": "staging-api.acme.io", "status": "stale" }
+  ],
+  "total": 2
+}
+```
+
+---
+
+### Example 4 — AI Summarize (attack surface summary)
+
+**Prompt:**
+```json
+{ "query": "summarize our attack surface" }
+```
+
+**API Response:**
+```json
+{
+  "summary": "Your organization has 47 tracked assets. 12 are currently stale (last seen >30 days ago), including 3 certificates that may have expired. The majority of assets are subdomains (24) and services (15). Production-tagged assets total 31, with 4 stale. Recommend reviewing the 3 stale certificates and rerunning scans on the 8 stale IP addresses."
+}
+```
+
+---
+
+### Example 5 — Invalid / unsupported query (graceful failure)
+
+**Prompt:**
+```json
+{ "query": "" }
+```
+
+**API Response (422):**
+```json
+{ "detail": "Query must not be empty." }
+```
+
+> **Design note:** If Gemini returns a malformed filter (not a valid JSON matching the schema), the system returns HTTP 422 with a user-friendly message — never a 500 error. The LLM error is logged server-side with the `request_id` for debugging.
+
+---
+
+## 🔧 Environment Variables
+
+All configuration is done via environment variables. Copy `.env.example` to `.env` and fill in the required values.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DATABASE_URL` | ✅ | — | PostgreSQL connection string (`postgresql+asyncpg://...`) |
+| `REDIS_URL` | ✅ | — | Redis connection string (`redis://...`) |
+| `JWT_PRIVATE_KEY_B64` | ✅ | — | Base64-encoded RSA private key (for signing tokens) |
+| `JWT_PUBLIC_KEY_B64` | ✅ | — | Base64-encoded RSA public key (for verifying tokens) |
+| `GEMINI_API_KEY` | ✅ | — | Google Gemini API key ([get free](https://aistudio.google.com/app/apikey)) |
+| `CELERY_BROKER_URL` | ✅ | — | Celery broker URL (usually same Redis, DB 1) |
+| `CELERY_RESULT_BACKEND` | ✅ | — | Celery results URL (usually same Redis, DB 2) |
+| `APP_ENV` | ❌ | `development` | `development` or `production` |
+| `APP_DEBUG` | ❌ | `false` | Enable debug mode (never `true` in production) |
+| `DOCS_ENABLED` | ❌ | `true` | Show Swagger UI at `/docs` (disable in production) |
+| `SEED_ON_STARTUP` | ❌ | `false` | Load `sample_dataset.json` on first startup |
+| `TENANT_ISOLATION` | ❌ | `row` | `row` (shared DB) or `database` (separate DB per org) |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | ❌ | `15` | Access token TTL in minutes |
+| `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | ❌ | `7` | Refresh token TTL in days |
+| `GEMINI_MODEL` | ❌ | `gemini-2.0-flash` | Gemini model name |
+| `POSTGRES_PASSWORD` | ❌ | `darkatlas_dev_only` | PostgreSQL password (for Docker Compose) |
+
+> See [`.env.example`](.env.example) for the full template with descriptions.
+
+---
+
+## 🏗️ Design Decisions & Assumptions
+
+### Key Design Decisions
+
+| Decision | Rationale |
+|---|---|
+| **FastAPI** over Flask/Django | Native async, Pydantic integration, auto OpenAPI docs |
+| **RS256 JWT** over HS256 | Asymmetric — verifying services never need the signing key |
+| **asyncpg** over psycopg2 | Native async PostgreSQL driver — no thread pool overhead |
+| **Celery + Redis** for bulk import | Off-loads heavy work from HTTP request; Redis already required for cache |
+| **Pydantic hallucination guard** | LLM outputs a filter schema, never asset data — 100% of records come from real DB |
+| **GIN indexes on tags/metadata** | PostgreSQL array containment and JSONB queries are fast even at 1M+ rows |
+| **Upsert ON CONFLICT** | Idempotent imports — running the same scan twice never creates duplicates |
+| **Row-level tenant isolation** (default) | Single DB is cost-effective; `org_id` FK enforced at repository layer |
+| **APScheduler** over Celery beat | No extra broker overhead for a single hourly cron |
+| **structlog JSON** | Machine-readable logs with `request_id` and `org_id` on every line |
+
+### Assumptions
+
+- Each organization registers independently; no super-admin provisioning workflow.
+- Asset deduplication key is `(org_id, type, value)` — same value with a different type is a different asset.
+- `stale` threshold defaults to 30 days; configurable per deployment.
+- The AI layer is read-only — it queries but never mutates assets.
+- Bulk import failures are per-record (partial success); the job does not abort on a single bad record.
+
+---
+
 
 Control via `TENANT_ISOLATION` in `.env`:
 
