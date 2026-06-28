@@ -69,6 +69,9 @@ async def _run_bulk_import(
     })
 
     # Process in chunks
+    temp_id_to_uuid = {}
+    pending_relationships = []
+
     for chunk_start in range(0, total, CHUNK_SIZE):
         chunk = records[chunk_start: chunk_start + CHUNK_SIZE]
         async with factory() as db:
@@ -80,6 +83,14 @@ async def _run_bulk_import(
                     asset, err = await svc.ingest_record(record)
                     if asset:
                         imported += 1
+                        if raw.get("id"):
+                            temp_id_to_uuid[str(raw["id"])] = asset.id
+                        
+                        if record.parent:
+                            pending_relationships.append((str(raw.get("id")), record.parent, "subdomain_of"))
+                        if record.covers:
+                            # If A covers B, then B is covered_by A. So source=B, target=A.
+                            pending_relationships.append((record.covers, str(raw.get("id")), "covered_by"))
                     else:
                         error_count += 1
                         errors.append({
@@ -103,6 +114,26 @@ async def _run_bulk_import(
             "error_count": error_count,
             "progress_pct": progress_pct,
         })
+
+    # Process pending relationships
+    if pending_relationships:
+        async with factory() as db:
+            from app.assets.models import AssetRelationship
+            for source_temp, target_temp, rel_type in pending_relationships:
+                source_id = temp_id_to_uuid.get(source_temp)
+                target_id = temp_id_to_uuid.get(target_temp)
+                if source_id and target_id:
+                    # Upsert relationship
+                    from sqlalchemy.dialects.postgresql import insert as pg_insert
+                    stmt = pg_insert(AssetRelationship).values(
+                        id=uuid.uuid4(),
+                        org_id=org_id,
+                        source_id=source_id,
+                        target_id=target_id,
+                        rel_type=rel_type,
+                    ).on_conflict_do_nothing()
+                    await db.execute(stmt)
+            await db.commit()
 
     # Final status
     final_status = "done" if error_count < total else "failed"

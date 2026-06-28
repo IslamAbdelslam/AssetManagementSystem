@@ -58,7 +58,31 @@ class AssetRepository:
             .where(Asset.id == asset_id, Asset.org_id == self.org_id)
             .values(status="archived")
         )
-        return result.rowcount > 0
+        return result.rowcount > 0  # type: ignore[attr-defined]
+
+    async def get_stats(self) -> dict:
+        from sqlalchemy import func
+        total = await self.db.scalar(select(func.count(Asset.id)).where(Asset.org_id == self.org_id))
+        
+        type_rows = await self.db.execute(
+            select(Asset.type, func.count(Asset.id))
+            .where(Asset.org_id == self.org_id)
+            .group_by(Asset.type)
+        )
+        by_type = {row[0]: row[1] for row in type_rows.all() if row[0]}
+        
+        status_rows = await self.db.execute(
+            select(Asset.status, func.count(Asset.id))
+            .where(Asset.org_id == self.org_id)
+            .group_by(Asset.status)
+        )
+        by_status = {row[0]: row[1] for row in status_rows.all() if row[0]}
+        
+        return {
+            "total_assets": total or 0,
+            "by_type": by_type,
+            "by_status": by_status,
+        }
 
     async def list_assets(
         self,
@@ -102,6 +126,12 @@ class AssetRepository:
         Merge strategy: incoming metadata wins per-key; tags are union-ed.
         """
         now = datetime.now(timezone.utc)
+        
+        # Map pydantic 'metadata' field to SQLAlchemy 'metadata_' attribute
+        insert_data = data.copy()
+        if "metadata" in insert_data:
+            insert_data["metadata_"] = insert_data.pop("metadata")
+            
         stmt = (
             pg_insert(Asset)
             .values(
@@ -109,7 +139,7 @@ class AssetRepository:
                 org_id=self.org_id,
                 first_seen=now,
                 last_seen=now,
-                **data,
+                **insert_data,
             )
             .on_conflict_do_update(
                 constraint="uq_asset_org_type_value",
@@ -146,7 +176,7 @@ class AssetRepository:
             )
             .values(status="stale")
         )
-        return result.rowcount
+        return result.rowcount  # type: ignore[attr-defined]
 
     async def mark_all_stale(self, threshold_days: int) -> int:
         """Mark stale across ALL orgs (used by scheduler)."""
@@ -158,7 +188,7 @@ class AssetRepository:
             )
             .values(status="stale")
         )
-        return result.rowcount
+        return result.rowcount  # type: ignore[attr-defined]
 
     # ── Relationships ─────────────────────────────────────────────────────────
     async def create_relationship(
@@ -194,7 +224,7 @@ class AssetRepository:
                 AssetRelationship.org_id == self.org_id,
             )
         )
-        return result.rowcount > 0
+        return result.rowcount > 0  # type: ignore[attr-defined]
 
     # ── Import Jobs ───────────────────────────────────────────────────────────
     async def create_job(self, total: int) -> ImportJob:

@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID, ENUM
 from alembic import op
 
 
@@ -13,12 +14,27 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # ── Enums ──────────────────────────────────────────────────────────────
-    op.execute("CREATE TYPE user_role_enum AS ENUM ('admin', 'analyst', 'readonly')")
-    op.execute("CREATE TYPE asset_type_enum AS ENUM ('domain', 'subdomain', 'ip_address', 'service', 'certificate', 'technology')")
-    op.execute("CREATE TYPE asset_status_enum AS ENUM ('active', 'stale', 'archived')")
-    op.execute("CREATE TYPE asset_source_enum AS ENUM ('scan', 'import', 'manual')")
-    op.execute("CREATE TYPE job_status_enum AS ENUM ('queued', 'running', 'done', 'failed')")
+    # ── Enums (idempotent — safe to re-run) ────────────────────────────────
+    # asyncpg tries to send every statement as a prepared query, but
+    # PostgreSQL cannot prepare DO-block statements. no_parameters=True
+    # forces simple (non-prepared) query execution for these statements.
+    bind = op.get_bind()
+    for stmt in [
+        "DO $$ BEGIN CREATE TYPE user_role_enum AS ENUM ('admin', 'analyst', 'readonly'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+        "DO $$ BEGIN CREATE TYPE asset_type_enum AS ENUM ('domain', 'subdomain', 'ip_address', 'service', 'certificate', 'technology'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+        "DO $$ BEGIN CREATE TYPE asset_status_enum AS ENUM ('active', 'stale', 'archived'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+        "DO $$ BEGIN CREATE TYPE asset_source_enum AS ENUM ('scan', 'import', 'manual'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+        "DO $$ BEGIN CREATE TYPE job_status_enum AS ENUM ('queued', 'running', 'done', 'failed'); EXCEPTION WHEN duplicate_object THEN NULL; END $$",
+    ]:
+        bind.execute(text(stmt).execution_options(no_parameters=True))
+
+    # Use postgresql.ENUM(create_type=False) instead of sa.Enum() so that
+    # SQLAlchemy's _on_table_create event does NOT fire a duplicate CREATE TYPE.
+    user_role = ENUM("admin", "analyst", "readonly", name="user_role_enum", create_type=False)
+    asset_type = ENUM("domain", "subdomain", "ip_address", "service", "certificate", "technology", name="asset_type_enum", create_type=False)
+    asset_status = ENUM("active", "stale", "archived", name="asset_status_enum", create_type=False)
+    asset_source = ENUM("scan", "import", "manual", name="asset_source_enum", create_type=False)
+    job_status = ENUM("queued", "running", "done", "failed", name="job_status_enum", create_type=False)
 
     # ── organizations ──────────────────────────────────────────────────────
     op.create_table(
@@ -39,7 +55,7 @@ def upgrade() -> None:
         sa.Column("org_id", UUID(as_uuid=True), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
         sa.Column("email", sa.String(255), nullable=False),
         sa.Column("hashed_password", sa.Text, nullable=False),
-        sa.Column("role", sa.Enum("admin", "analyst", "readonly", name="user_role_enum", create_type=False), nullable=False, server_default="readonly"),
+        sa.Column("role", user_role, nullable=False, server_default="readonly"),
         sa.Column("is_active", sa.Boolean, server_default="true", nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.UniqueConstraint("email", name="uq_user_email"),
@@ -52,12 +68,12 @@ def upgrade() -> None:
         "assets",
         sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("org_id", UUID(as_uuid=True), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("type", sa.Enum(*["domain","subdomain","ip_address","service","certificate","technology"], name="asset_type_enum", create_type=False), nullable=False),
+        sa.Column("type", asset_type, nullable=False),
         sa.Column("value", sa.String(512), nullable=False),
-        sa.Column("status", sa.Enum("active","stale","archived", name="asset_status_enum", create_type=False), nullable=False, server_default="active"),
+        sa.Column("status", asset_status, nullable=False, server_default="active"),
         sa.Column("first_seen", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("last_seen", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("source", sa.Enum("scan","import","manual", name="asset_source_enum", create_type=False), nullable=False),
+        sa.Column("source", asset_source, nullable=False),
         sa.Column("tags", ARRAY(sa.Text), server_default=sa.text("'{}'"), nullable=False),
         sa.Column("metadata", JSONB, server_default=sa.text("'{}'"), nullable=False),
         sa.UniqueConstraint("org_id", "type", "value", name="uq_asset_org_type_value"),
@@ -78,7 +94,7 @@ def upgrade() -> None:
         sa.Column("target_id", UUID(as_uuid=True), sa.ForeignKey("assets.id", ondelete="CASCADE"), nullable=False),
         sa.Column("rel_type", sa.String(100), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.UniqueConstraint("org_id","source_id","target_id","rel_type", name="uq_relationship_org_src_tgt_type"),
+        sa.UniqueConstraint("org_id", "source_id", "target_id", "rel_type", name="uq_relationship_org_src_tgt_type"),
     )
     op.create_index("ix_rel_org", "asset_relationships", ["org_id"])
     op.create_index("ix_rel_source", "asset_relationships", ["source_id"])
@@ -89,7 +105,7 @@ def upgrade() -> None:
         "import_jobs",
         sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("org_id", UUID(as_uuid=True), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("status", sa.Enum("queued","running","done","failed", name="job_status_enum", create_type=False), nullable=False, server_default="queued"),
+        sa.Column("status", job_status, nullable=False, server_default="queued"),
         sa.Column("total", sa.Integer, server_default="0"),
         sa.Column("imported", sa.Integer, server_default="0"),
         sa.Column("error_count", sa.Integer, server_default="0"),

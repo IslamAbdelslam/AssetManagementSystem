@@ -15,7 +15,9 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import DateTime
+from datetime import datetime, timezone
 
 from app.config import get_settings
 
@@ -23,7 +25,12 @@ settings = get_settings()
 
 # ── Base ORM class ─────────────────────────────────────────────────────────────
 class Base(DeclarativeBase):
-    pass
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
 
 # ── Primary engine (row mode: main DB; database mode: meta DB) ─────────────────
@@ -140,5 +147,5 @@ def get_redis() -> aioredis.Redis:
 async def close_redis() -> None:
     global _redis_client
     if _redis_client:
-        await _redis_client.aclose()
+        await _redis_client.aclose()  # type: ignore[attr-defined]
         _redis_client = None

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import SystemMessage
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import ValidationError
 
@@ -40,7 +41,7 @@ async def run_nl_query_chain(nl_query: str) -> AssetFilterSchema:
     llm = _get_llm()
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", NL_QUERY_SYSTEM_PROMPT),
+        SystemMessage(content=NL_QUERY_SYSTEM_PROMPT),
         ("human", "{query}"),
     ])
 
@@ -71,7 +72,7 @@ async def run_summarize_chain(asset_data: str, focus: str | None) -> str:
     llm = _get_llm()
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", SUMMARIZE_SYSTEM_PROMPT),
+        SystemMessage(content=SUMMARIZE_SYSTEM_PROMPT),
         ("human", "Focus: {focus}\n\nAsset Data:\n{asset_data}"),
     ])
 

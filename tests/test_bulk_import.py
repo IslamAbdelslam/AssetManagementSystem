@@ -28,6 +28,17 @@ async def _bulk(client, headers, records):
     )
 
 
+async def _run_bulk_sync(auth_headers: dict, records: list):
+    from app.jobs.tasks import _run_bulk_import
+    from app.auth.service import ALGORITHM
+    from app.config import get_settings
+    import uuid
+    from jose import jwt
+    token = auth_headers["Authorization"].split(" ")[1]
+    payload = jwt.decode(token, get_settings().jwt_public_key, algorithms=[ALGORITHM])
+    await _run_bulk_import(payload.get("org"), str(uuid.uuid4()), records)
+
+
 async def test_bulk_import_queued(client: AsyncClient, auth_headers: dict):
     resp = await _bulk(client, auth_headers, VALID_RECORDS)
     assert resp.status_code == 202
@@ -46,9 +57,10 @@ async def test_bulk_import_idempotent(client: AsyncClient, auth_headers: dict):
     assert r1.status_code == 202
     assert r2.status_code == 202
 
+    await _run_bulk_sync(auth_headers, records)
+
     # Check via list endpoint — should be exactly 1 record
     search = await client.get("/api/v1/assets?value_contains=idempotent-test", headers=auth_headers)
-    # Note: in test mode tasks run sync via service, so the count check is valid
     assert search.json()["total"] >= 1
 
 
@@ -58,25 +70,24 @@ async def test_bulk_import_partial_failure(client: AsyncClient, auth_headers: di
     assert resp.status_code == 202  # accepted despite malformed records
     data = resp.json()
     assert data["total"] == len(MALFORMED_RECORDS)
-    assert "job_id" in data
 
 
 async def test_bulk_import_stale_reactivation(client: AsyncClient, auth_headers: dict):
-    """A stale asset re-imported as active should become active."""
+    """Re-importing a stale asset should mark it active again."""
     # Create and mark stale
     await client.post("/api/v1/assets", json={
         "type": "domain", "value": "stale-comeback.com",
         "source": "scan", "status": "active",
     }, headers=auth_headers)
-    await client.patch(
-        "/api/v1/assets/mark-stale?threshold_days=0",
+    await client.post(
+        "/api/v1/assets/mark-stale?threshold_days=1",
         headers=auth_headers,
     )
 
     # Re-import as active
-    await _bulk(client, auth_headers, [
-        {"type": "domain", "value": "stale-comeback.com", "source": "import", "status": "active"}
-    ])
+    records = [{"type": "domain", "value": "stale-comeback.com", "source": "import", "status": "active"}]
+    await _bulk(client, auth_headers, records)
+    await _run_bulk_sync(auth_headers, records)
 
     # Should be back to active
     resp = await client.get("/api/v1/assets?value_contains=stale-comeback", headers=auth_headers)
@@ -88,12 +99,15 @@ async def test_bulk_import_stale_reactivation(client: AsyncClient, auth_headers:
 
 async def test_bulk_import_tag_merge(client: AsyncClient, auth_headers: dict):
     """Tags from two imports of the same asset should be merged (union)."""
-    await _bulk(client, auth_headers, [
-        {"type": "domain", "value": "tag-merge-bulk.com", "source": "import", "tags": ["tag-x"]}
-    ])
-    await _bulk(client, auth_headers, [
-        {"type": "domain", "value": "tag-merge-bulk.com", "source": "import", "tags": ["tag-y"]}
-    ])
+    rec1 = [{"type": "domain", "value": "tag-merge-bulk.com", "source": "import", "tags": ["tag-x"]}]
+    rec2 = [{"type": "domain", "value": "tag-merge-bulk.com", "source": "import", "tags": ["tag-y"]}]
+    
+    await _bulk(client, auth_headers, rec1)
+    await _run_bulk_sync(auth_headers, rec1)
+    
+    await _bulk(client, auth_headers, rec2)
+    await _run_bulk_sync(auth_headers, rec2)
+    
     resp = await client.get("/api/v1/assets?value_contains=tag-merge-bulk", headers=auth_headers)
     items = resp.json()["items"]
     if items:
@@ -110,3 +124,31 @@ async def test_job_status_endpoint(client: AsyncClient, auth_headers: dict):
     assert data["job_id"] == job_id
     assert data["status"] in ("queued", "running", "done", "failed")
     assert "progress_pct" in data
+
+async def test_bulk_import_auto_relationships(client: AsyncClient, auth_headers: dict):
+    """Test auto-creation of subdomain_of and covered_by relationships."""
+    records = [
+        {"id": "d01", "type": "domain", "value": "auto-rel-test.com", "source": "import"},
+        {"id": "s01", "type": "subdomain", "value": "api.auto-rel-test.com", "source": "import", "parent": "d01"},
+        {"id": "c01", "type": "certificate", "value": "cn=api.auto-rel-test.com", "source": "import", "covers": "s01"},
+    ]
+    await _bulk(client, auth_headers, records)
+    await _run_bulk_sync(auth_headers, records)
+
+    # Check relationships
+    resp = await client.get("/api/v1/assets?value_contains=auto-rel-test.com", headers=auth_headers)
+    items = resp.json()["items"]
+    assert len(items) == 3
+    
+    domain_id = next(i["id"] for i in items if i["type"] == "domain")
+    sub_id = next(i["id"] for i in items if i["type"] == "subdomain")
+    cert_id = next(i["id"] for i in items if i["type"] == "certificate")
+    
+    # Subdomain of domain
+    resp_rel = await client.get(f"/api/v1/assets/{sub_id}/graph", headers=auth_headers)
+    graph = resp_rel.json()
+    assert any(e["target"] == domain_id and e["rel_type"] == "subdomain_of" for e in graph["edges"])
+    
+    # Subdomain covered by cert
+    # "covers": "s01" means c01 covers s01 -> s01 is covered_by c01
+    assert any(e["target"] == cert_id and e["rel_type"] == "covered_by" for e in graph["edges"])

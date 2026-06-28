@@ -8,14 +8,16 @@ import uuid
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.core.logging import configure_logging, get_logger
-from app.database import close_redis, get_engine, get_redis
+from app.database import close_redis, get_engine, get_redis, get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from redis import asyncio as aioredis
 from app.lifecycle.scheduler import start_scheduler, stop_scheduler
 
 log = get_logger(__name__)
@@ -76,6 +78,22 @@ def create_app() -> FastAPI:
             "IPs, services, certificates, and technologies."
         ),
         version="1.0.0",
+        contact={
+            "name": "Buguard Support",
+            "url": "https://buguard.io",
+            "email": "support@buguard.io",
+        },
+        license_info={
+            "name": "Proprietary",
+            "url": "https://buguard.io/terms",
+        },
+        openapi_tags=[
+            {"name": "Auth", "description": "Authentication and organization management"},
+            {"name": "Assets", "description": "Asset CRUD, filtering, and bulk operations"},
+            {"name": "Graph", "description": "Asset relationship graphing and visualization"},
+            {"name": "AI", "description": "Natural language query interface"},
+            {"name": "System", "description": "System health and status"},
+        ],
         docs_url=docs_url,
         redoc_url=redoc_url,
         lifespan=lifespan,
@@ -106,10 +124,14 @@ def create_app() -> FastAPI:
     # ── Request ID + Structured Logging Middleware ─────────────────────────
     @application.middleware("http")
     async def request_id_middleware(request: Request, call_next: object):  # type: ignore[type-arg]
+        import time
+        start_time = time.time()
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(request_id=request_id, path=request.url.path)
         response: Response = await call_next(request)  # type: ignore[operator]
+        process_time = time.time() - start_time
+        response.headers["X-Process-Time"] = str(process_time)
         response.headers["X-Request-ID"] = request_id
         return response
 
@@ -128,9 +150,27 @@ def create_app() -> FastAPI:
         )
 
     # ── Health Endpoint ────────────────────────────────────────────────────
-    @application.get("/health", tags=["System"], summary="Health check")
-    async def health() -> dict:
-        return {"status": "ok", "env": settings.APP_ENV}
+    @application.get("/health", tags=["System"], summary="Health check", response_description="System status including DB and Redis connectivity.")
+    async def health(
+        db: AsyncSession = Depends(get_db),
+        redis: aioredis.Redis = Depends(get_redis)
+    ) -> dict:
+        status = {"status": "ok", "env": settings.APP_ENV, "db": "unknown", "redis": "unknown"}
+        try:
+            await db.execute(__import__("sqlalchemy").text("SELECT 1"))
+            status["db"] = "ok"
+        except Exception:
+            status["db"] = "error"
+            status["status"] = "degraded"
+        
+        try:
+            await redis.ping()
+            status["redis"] = "ok"
+        except Exception:
+            status["redis"] = "error"
+            status["status"] = "degraded"
+            
+        return status
 
     # ── Static Files (D3 Graph) ────────────────────────────────────────────
     application.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -140,6 +180,16 @@ def create_app() -> FastAPI:
     from app.assets.router import router as assets_router
     from app.graph.router import router as graph_router
     from app.ai.router import router as ai_router
+    
+    # ── Rate Limiting Setup ────────────────────────────────────────────────
+    from slowapi.middleware import SlowAPIMiddleware
+    from slowapi.errors import RateLimitExceeded
+    from slowapi import _rate_limit_exceeded_handler
+    from app.core.rate_limit import limiter
+
+    application.state.limiter = limiter
+    application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+    application.add_middleware(SlowAPIMiddleware)
 
     application.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
     application.include_router(assets_router, prefix="/api/v1", tags=["Assets"])

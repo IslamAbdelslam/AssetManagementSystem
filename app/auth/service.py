@@ -15,6 +15,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
+import bcrypt
 import redis.asyncio as aioredis
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -39,11 +40,15 @@ ALGORITHM = "RS256"
 
 # ── Password helpers ───────────────────────────────────────────────────────────
 def hash_password(plain: str) -> str:
-    return _pwd_context.hash(plain)
+    salt = bcrypt.gensalt(rounds=12)
+    return bcrypt.hashpw(plain.encode('utf-8'), salt).decode('utf-8')
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_context.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(plain.encode('utf-8'), hashed.encode('utf-8'))
+    except ValueError:
+        return False
 
 
 # ── JWT helpers ────────────────────────────────────────────────────────────────
@@ -159,7 +164,7 @@ async def authenticate_user(email: str, plain_password: str, db: AsyncSession) -
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
     # Constant-time: always verify even if user not found (prevents timing oracle)
-    dummy_hash = "$2b$12$placeholder.hash.for.timing.consistency.padding"
+    dummy_hash = "$2b$12$f.Ei7YdE4QYjKp9.gThXmuWUAs0vg.9qRGb8r/x1lrwSSp55V0VAu"
     password_ok = verify_password(plain_password, user.hashed_password if user else dummy_hash)
     if not user or not password_ok or not user.is_active:
         raise UnauthorizedError("Invalid credentials.")

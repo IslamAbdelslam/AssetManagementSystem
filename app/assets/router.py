@@ -9,16 +9,19 @@ import uuid
 from typing import Annotated
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import schemas
+from app.assets.repository import AssetRepository
 from app.assets.service import AssetService
 from app.auth.models import User
 from app.auth.service import get_current_user, require_role
 from app.core.exceptions import NotFoundError
 from app.core.pagination import PageParams, PagedResponse
+from app.core.rate_limit import limiter, RATE_WRITE, RATE_BULK
 from app.database import get_db, get_redis
+from app.jobs.tasks import bulk_import_task, _progress_key
 
 router = APIRouter()
 
@@ -54,6 +57,16 @@ async def list_assets(
     )
 
 
+# ── Stats ──────────────────────────────────────────────────────────────────────
+@router.get("/assets/stats", response_model=schemas.AssetStatsResponse, summary="Get asset statistics")
+async def get_stats(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> schemas.AssetStatsResponse:
+    stats = await _svc(db, current_user).get_stats()
+    return schemas.AssetStatsResponse(**stats)
+
+
 # ── Create ─────────────────────────────────────────────────────────────────────
 @router.post(
     "/assets",
@@ -62,7 +75,9 @@ async def list_assets(
     summary="Create asset",
     dependencies=[Depends(require_role("admin", "analyst"))],
 )
+@limiter.limit(RATE_WRITE)
 async def create_asset(
+    request: Request,
     body: schemas.AssetCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -89,7 +104,9 @@ async def get_asset(
     summary="Update asset",
     dependencies=[Depends(require_role("admin", "analyst"))],
 )
+@limiter.limit(RATE_WRITE)
 async def update_asset(
+    request: Request,
     asset_id: uuid.UUID,
     body: schemas.AssetUpdate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -106,7 +123,9 @@ async def update_asset(
     summary="Archive asset",
     dependencies=[Depends(require_role("admin"))],
 )
+@limiter.limit(RATE_WRITE)
 async def delete_asset(
+    request: Request,
     asset_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -122,14 +141,13 @@ async def delete_asset(
     summary="Bulk import assets (async job)",
     dependencies=[Depends(require_role("admin", "analyst"))],
 )
+@limiter.limit(RATE_BULK)
 async def bulk_import(
+    request: Request,
     body: schemas.BulkImportRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> schemas.BulkImportResponse:
-    from app.jobs.tasks import bulk_import_task
-    from app.assets.repository import AssetRepository
-
     repo = AssetRepository(db, current_user.org_id)
     job = await repo.create_job(len(body.records))
 
@@ -152,8 +170,6 @@ async def job_status(
     db: Annotated[AsyncSession, Depends(get_db)],
     redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ) -> schemas.JobStatusResponse:
-    from app.jobs.tasks import _progress_key
-
     # Try Redis first (live progress)
     progress = await redis.hgetall(_progress_key(str(job_id)))
     if progress:
@@ -168,7 +184,6 @@ async def job_status(
         )
 
     # Fallback to DB
-    from app.assets.repository import AssetRepository
     repo = AssetRepository(db, current_user.org_id)
     job = await repo.get_job(job_id)
     if not job:
@@ -192,7 +207,9 @@ async def job_status(
     summary="Manually mark stale assets",
     dependencies=[Depends(require_role("admin"))],
 )
+@limiter.limit(RATE_WRITE)
 async def mark_stale(
+    request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     threshold_days: int = Query(default=30, ge=1, le=365),
@@ -209,13 +226,14 @@ async def mark_stale(
     summary="Create relationship",
     dependencies=[Depends(require_role("admin", "analyst"))],
 )
+@limiter.limit(RATE_WRITE)
 async def create_relationship(
+    request: Request,
     asset_id: uuid.UUID,
     body: schemas.RelationshipCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> schemas.RelationshipResponse:
-    from app.assets.repository import AssetRepository
     repo = AssetRepository(db, current_user.org_id)
     # Verify both assets belong to this org
     src = await repo.get_by_id(asset_id)
@@ -238,7 +256,6 @@ async def list_relationships(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[schemas.RelationshipResponse]:
-    from app.assets.repository import AssetRepository
     repo = AssetRepository(db, current_user.org_id)
     rels = await repo.get_relationships(asset_id)
     return [schemas.RelationshipResponse.model_validate(r) for r in rels]
@@ -250,12 +267,13 @@ async def list_relationships(
     summary="Delete relationship",
     dependencies=[Depends(require_role("admin"))],
 )
+@limiter.limit(RATE_WRITE)
 async def delete_relationship(
+    request: Request,
     rel_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
-    from app.assets.repository import AssetRepository
     repo = AssetRepository(db, current_user.org_id)
     deleted = await repo.delete_relationship(rel_id)
     if not deleted:
