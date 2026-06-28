@@ -27,7 +27,7 @@ class AssetFilterSchema(BaseModel):
     tags: list[str] = Field(default_factory=list)
     value_contains: str | None = None
     source: str | None = None
-    metadata_filter: dict[str, Any] | None = Field(
+    metadata_filter: dict[str, Any] = Field(
         default_factory=dict,
         description="Key-value pairs to match inside metadata JSON",
     )
