@@ -147,5 +147,5 @@ def get_redis() -> aioredis.Redis:
 async def close_redis() -> None:
     global _redis_client
     if _redis_client:
-        await _redis_client.aclose()
+        await _redis_client.aclose()  # type: ignore[attr-defined]
         _redis_client = None

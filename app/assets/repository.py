@@ -58,7 +58,7 @@ class AssetRepository:
             .where(Asset.id == asset_id, Asset.org_id == self.org_id)
             .values(status="archived")
         )
-        return result.rowcount > 0
+        return result.rowcount > 0  # type: ignore[attr-defined]
 
     async def get_stats(self) -> dict:
         from sqlalchemy import func
@@ -176,7 +176,7 @@ class AssetRepository:
             )
             .values(status="stale")
         )
-        return result.rowcount
+        return result.rowcount  # type: ignore[attr-defined]
 
     async def mark_all_stale(self, threshold_days: int) -> int:
         """Mark stale across ALL orgs (used by scheduler)."""
@@ -188,7 +188,7 @@ class AssetRepository:
             )
             .values(status="stale")
         )
-        return result.rowcount
+        return result.rowcount  # type: ignore[attr-defined]
 
     # ── Relationships ─────────────────────────────────────────────────────────
     async def create_relationship(
@@ -224,7 +224,7 @@ class AssetRepository:
                 AssetRelationship.org_id == self.org_id,
             )
         )
-        return result.rowcount > 0
+        return result.rowcount > 0  # type: ignore[attr-defined]
 
     # ── Import Jobs ───────────────────────────────────────────────────────────
     async def create_job(self, total: int) -> ImportJob:

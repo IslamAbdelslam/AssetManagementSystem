@@ -188,7 +188,7 @@ def create_app() -> FastAPI:
     from app.core.rate_limit import limiter
 
     application.state.limiter = limiter
-    application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
     application.add_middleware(SlowAPIMiddleware)
 
     application.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
