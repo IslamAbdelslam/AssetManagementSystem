@@ -133,6 +133,13 @@ class JobStatusResponse(BaseModel):
     progress_pct: float
 
 
+# ── Stats ──────────────────────────────────────────────────────────────────────
+class AssetStatsResponse(BaseModel):
+    total_assets: int
+    by_type: dict[str, int]
+    by_status: dict[str, int]
+
+
 # ── Filtering ──────────────────────────────────────────────────────────────────
 class AssetFilter(BaseModel):
     type: str | None = None

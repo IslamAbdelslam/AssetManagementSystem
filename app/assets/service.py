@@ -28,16 +28,17 @@ class AssetService:
         asset, _ = await self.repo.upsert(data)
         return asset
 
-    async def get(self, asset_id: uuid.UUID) -> Asset:
+    async def _get_or_404(self, asset_id: uuid.UUID) -> Asset:
         asset = await self.repo.get_by_id(asset_id)
         if not asset:
             raise NotFoundError("Asset", str(asset_id))
         return asset
 
+    async def get(self, asset_id: uuid.UUID) -> Asset:
+        return await self._get_or_404(asset_id)
+
     async def update(self, asset_id: uuid.UUID, body: AssetUpdate) -> Asset:
-        asset = await self.repo.get_by_id(asset_id)
-        if not asset:
-            raise NotFoundError("Asset", str(asset_id))
+        await self._get_or_404(asset_id)
         data = {k: v for k, v in body.model_dump(by_alias=False).items() if v is not None}
         updated = await self.repo.update(asset_id, data)
         return updated  # type: ignore[return-value]
@@ -49,6 +50,9 @@ class AssetService:
 
     async def list_assets(self, filters: dict, params: Any) -> tuple[list[Asset], int]:
         return await self.repo.list_assets(filters, params)
+
+    async def get_stats(self) -> dict:
+        return await self.repo.get_stats()
 
     async def mark_stale(self, threshold_days: int) -> int:
         return await self.repo.mark_stale(threshold_days)

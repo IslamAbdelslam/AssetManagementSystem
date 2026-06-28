@@ -5,7 +5,7 @@ import json
 from datetime import date
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai import chains, schemas
@@ -13,6 +13,7 @@ from app.assets.repository import AssetRepository
 from app.auth.models import User
 from app.auth.service import get_current_user
 from app.core.pagination import PageParams
+from app.core.rate_limit import limiter, RATE_AI
 from app.database import get_db
 
 router = APIRouter()
@@ -34,7 +35,9 @@ def _serialize_asset(a: Any) -> dict:
 
 
 @router.post("/query", response_model=schemas.NLQueryResponse, summary="Natural language asset query")
+@limiter.limit(RATE_AI)
 async def nl_query(
+    request: Request,
     body: schemas.NLQueryRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -81,7 +84,9 @@ async def nl_query(
 
 
 @router.post("/summarize", response_model=schemas.SummarizeResponse, summary="AI asset landscape summary")
+@limiter.limit(RATE_AI)
 async def summarize(
+    request: Request,
     body: schemas.SummarizeRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -91,7 +96,7 @@ async def summarize(
     Data is fetched from DB first — LLM only summarizes, cannot invent.
     """
     repo = AssetRepository(db, current_user.org_id)
-    params = PageParams(page=1, page_size=200)
+    params = PageParams(page=1, page_size=100)
     assets, _ = await repo.list_assets({}, params)
 
     # Compute counts for response

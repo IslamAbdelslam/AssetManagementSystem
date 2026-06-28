@@ -5,10 +5,10 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    ARRAY, DateTime, Enum, ForeignKey, Index, Integer,
+    DateTime, Enum, ForeignKey, Index, Integer,
     String, Text, UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
