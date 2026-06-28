@@ -117,7 +117,7 @@ async def test_page_size_capped(client: AsyncClient, auth_headers: dict):
 
 
 async def test_mark_stale_endpoint(client: AsyncClient, auth_headers: dict):
-    resp = await client.post("/api/v1/assets/mark-stale?threshold_days=0", headers=auth_headers)
+    resp = await client.post("/api/v1/assets/mark-stale?threshold_days=1", headers=auth_headers)
     assert resp.status_code == 200
     assert "marked_stale" in resp.json()
 
@@ -129,3 +129,11 @@ async def test_metadata_size_limit(client: AsyncClient, auth_headers: dict):
         "metadata_": big_metadata,
     }, headers=auth_headers)
     assert resp.status_code == 422
+
+async def test_get_stats(client: AsyncClient, auth_headers: dict):
+    resp = await client.get("/api/v1/assets/stats", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "total_assets" in data
+    assert "by_type" in data
+    assert "by_status" in data
