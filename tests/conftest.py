@@ -10,7 +10,6 @@ import uuid
 from functools import lru_cache
 from typing import AsyncGenerator
 
-import pytest
 import pytest_asyncio
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -53,16 +52,16 @@ os.environ["APP_ENV"] = "development"
 os.environ["SEED_ON_STARTUP"] = "false"
 
 # Clear cached settings so our env vars take effect
-from app.config import get_settings
+from app.config import get_settings  # noqa: E402
 get_settings.cache_clear()
 
 # Disable rate limiter for tests
-from app.core.rate_limit import limiter
+from app.core.rate_limit import limiter  # noqa: E402
 limiter.enabled = False
 
 
 # ── Shared engine ─────────────────────────────────────────────
-from sqlalchemy import NullPool
+from sqlalchemy import NullPool  # noqa: E402
 
 _test_engine = create_async_engine(
     TEST_DATABASE_URL,
@@ -74,7 +73,7 @@ _test_session_factory = async_sessionmaker(
 )
 
 # Monkeypatch global database objects to use test pool
-import app.database
+import app.database  # noqa: E402
 app.database._engine = _test_engine
 app.database._session_factory = _test_session_factory
 app.database.get_engine = lambda: _test_engine
