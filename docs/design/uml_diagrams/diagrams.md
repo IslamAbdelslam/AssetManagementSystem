@@ -137,7 +137,7 @@ sequenceDiagram
 sequenceDiagram
     actor Client
     participant API as FastAPI
-    participant LLM as Gemini 2.0 Flash
+    participant LLM as Gemini 3.5 Flash
     participant Guard as Pydantic Guard
     participant DB as PostgreSQL
 

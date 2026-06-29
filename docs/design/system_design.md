@@ -226,7 +226,7 @@ Client
   ▼
 AI Router → chains.py
   │
-  ├─► Gemini 2.0 Flash (temperature=0)
+  ├─► Gemini 3.5 Flash (temperature=0)
   │     Prompt: "Given the available asset types and filters,
   │              generate a JSON filter for: {user_query}"
   │     Output: { "type": "certificate", "status": "stale", ... }

@@ -32,7 +32,7 @@
 | 🗂️ **Asset CRUD** | Idempotent upsert with tag-merge · soft delete · full filtering & pagination |
 | ⚡ **Bulk Import** | Async Celery jobs · 5,000 records/chunk · live Redis progress · 1M record support |
 | 🕸️ **Graph Traversal** | BFS up to 5 hops · D3.js interactive visualization · relationship CRUD |
-| 🤖 **AI / NL Query** | Gemini 2.0 Flash (temp=0) · Pydantic hallucination guard · attack surface summarization |
+| 🤖 **AI / NL Query** | Gemini 3.5 Flash (temp=0) · Pydantic hallucination guard · attack surface summarization |
 | 🔄 **Lifecycle** | APScheduler cron auto-marks stale assets · reactivation on re-import |
 | 🏢 **Multi-Tenancy** | Row-level isolation (default) or separate DB per org |
 | 🚦 **Rate Limiting** | Per-endpoint via slowapi (configurable) |
@@ -135,7 +135,7 @@ POST /ai/query  { "query": "show stale prod certs" }
 | Task Queue | Celery + Flower | 5.6 |
 | Rate Limiting | slowapi | 0.1.10 |
 | Auth | RS256 JWT + bcrypt-12 | — |
-| AI / LLM | LangChain + Gemini 2.0 Flash | — |
+| AI / LLM | LangChain + Gemini 3.5 Flash | — |
 | Scheduler | APScheduler | 3.11 |
 | Logging | structlog (JSON) | 26.1 |
 | CI / SAST | ruff · mypy · bandit · pip-audit | — |
@@ -343,7 +343,7 @@ curl "http://localhost:8000/api/v1/assets/<id>/graph?depth=2" \
 
 ## 🤖 AI Examples — Prompts & Outputs
 
-> The AI layer uses **Gemini 2.0 Flash at temperature=0**. The LLM outputs a structured filter — never raw asset data — which is then validated by Pydantic before querying the real database. This prevents hallucinations.
+> The AI layer uses **Gemini 3.5 Flash at temperature=0**. The LLM outputs a structured filter — never raw asset data — which is then validated by Pydantic before querying the real database. This prevents hallucinations.
 
 ### Example 1 — Filter by status and type
 
@@ -550,7 +550,7 @@ All configuration is done via environment variables. Copy `.env.example` to `.en
 | `TENANT_ISOLATION` | ❌ | `row` | `row` (shared DB) or `database` (separate DB per org) |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | ❌ | `15` | Access token TTL in minutes |
 | `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | ❌ | `7` | Refresh token TTL in days |
-| `GEMINI_MODEL` | ❌ | `gemini-2.0-flash` | Gemini model name |
+| `GEMINI_MODEL` | ❌ | `gemini-3.5-flash` | Gemini model name |
 | `POSTGRES_PASSWORD` | ❌ | `darkatlas_dev_only` | PostgreSQL password (for Docker Compose) |
 
 > See [`.env.example`](.env.example) for the full template with descriptions.
