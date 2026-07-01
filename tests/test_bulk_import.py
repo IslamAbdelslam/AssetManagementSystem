@@ -94,7 +94,7 @@ async def test_bulk_import_stale_reactivation(client: AsyncClient, auth_headers:
     items = resp.json()["items"]
     assert len(items) >= 1
     # At least one should be active after reactivation
-    assert any(i["value"] == "stale-comeback.com" for i in items)
+    assert any(i["value"] == "stale-comeback.com" and i["status"] == "active" for i in items)
 
 
 async def test_bulk_import_tag_merge(client: AsyncClient, auth_headers: dict):

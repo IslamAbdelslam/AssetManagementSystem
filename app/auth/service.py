@@ -9,6 +9,7 @@ Security notes:
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import secrets
 import uuid
@@ -20,7 +21,6 @@ import redis.asyncio as aioredis
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,7 +32,6 @@ from app.database import get_db
 settings = get_settings()
 
 # ── Crypto context ─────────────────────────────────────────────────────────────
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 _bearer = HTTPBearer(auto_error=False)
 
 ALGORITHM = "RS256"
@@ -149,10 +148,11 @@ async def register_org_and_admin(
     db.add(org)
     await db.flush()  # get org.id
 
+    hashed_pwd = await asyncio.to_thread(hash_password, plain_password)
     user = User(
         org_id=org.id,
         email=email,
-        hashed_password=hash_password(plain_password),
+        hashed_password=hashed_pwd,
         role="admin",
     )
     db.add(user)
@@ -165,7 +165,7 @@ async def authenticate_user(email: str, plain_password: str, db: AsyncSession) -
     user = result.scalar_one_or_none()
     # Constant-time: always verify even if user not found (prevents timing oracle)
     dummy_hash = "$2b$12$f.Ei7YdE4QYjKp9.gThXmuWUAs0vg.9qRGb8r/x1lrwSSp55V0VAu"
-    password_ok = verify_password(plain_password, user.hashed_password if user else dummy_hash)
+    password_ok = await asyncio.to_thread(verify_password, plain_password, user.hashed_password if user else dummy_hash)
     if not user or not password_ok or not user.is_active:
         raise UnauthorizedError("Invalid credentials.")
     return user

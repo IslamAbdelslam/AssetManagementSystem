@@ -16,6 +16,7 @@ limiter = Limiter(
     key_func=get_remote_address,
     default_limits=["200/minute"],
     storage_uri=settings.REDIS_URL,
+    enabled=True
 )
 
 # ── Rate-limit presets ─────────────────────────────────────────────────────────

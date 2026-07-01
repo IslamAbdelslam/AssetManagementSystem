@@ -99,3 +99,31 @@ async def test_cross_org_isolation(client: AsyncClient):
     resp = await client.get("/api/v1/assets?value_contains=secret-orga", headers=headers_b)
     assert resp.status_code == 200
     assert resp.json()["total"] == 0
+
+
+async def test_refresh_token_success(client: AsyncClient):
+    # Register and get initial tokens
+    resp = await client.post("/api/v1/auth/register", json={
+        "org": {"name": "Refresh Test", "slug": f"refresh-{uuid.uuid4().hex[:6]}"},
+        "email": f"refresh-{uuid.uuid4().hex[:8]}@test.com",
+        "password": "SecurePass123!",
+    })
+    data = resp.json()
+    refresh_token = data["refresh_token"]
+
+    # Refresh
+    refresh_resp = await client.post("/api/v1/auth/refresh", json={
+        "refresh_token": refresh_token
+    })
+    assert refresh_resp.status_code == 200
+    refresh_data = refresh_resp.json()
+    assert "access_token" in refresh_data
+    assert "refresh_token" in refresh_data
+    assert refresh_data["refresh_token"] != refresh_token
+
+
+async def test_refresh_token_invalid(client: AsyncClient):
+    refresh_resp = await client.post("/api/v1/auth/refresh", json={
+        "refresh_token": "invalid_or_expired_token"
+    })
+    assert refresh_resp.status_code == 401

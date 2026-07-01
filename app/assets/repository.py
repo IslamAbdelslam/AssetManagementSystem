@@ -98,7 +98,8 @@ class AssetRepository:
         if filters.get("source"):
             q = q.where(Asset.source == filters["source"])
         if filters.get("value_contains"):
-            q = q.where(Asset.value.ilike(f"%{filters['value_contains']}%"))
+            safe_val = filters["value_contains"].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            q = q.where(Asset.value.ilike(f"%{safe_val}%"))
         if filters.get("tags"):
             for tag in filters["tags"]:
                 q = q.where(Asset.tags.contains([tag]))
@@ -158,12 +159,14 @@ class AssetRepository:
                     "metadata": text("assets.metadata || excluded.metadata"),
                 },
             )
-            .returning(Asset)
+            .returning(Asset, text("xmax"))
         )
         result = await self.db.execute(stmt)
-        asset = result.scalar_one()
-        # Detect if it was an insert or update via first_seen == last_seen
-        created = asset.first_seen == asset.last_seen
+        row = result.first()
+        asset = row[0]
+        xmax = row[1]
+        # Detect if it was an insert or update via xmax == 0
+        created = xmax == 0
         return asset, created
 
     async def mark_stale(self, threshold_days: int) -> int:
@@ -178,9 +181,10 @@ class AssetRepository:
         )
         return result.rowcount  # type: ignore[attr-defined]
 
-    async def mark_all_stale(self, threshold_days: int) -> int:
+    @classmethod
+    async def mark_all_stale(cls, db: AsyncSession, threshold_days: int) -> int:
         """Mark stale across ALL orgs (used by scheduler)."""
-        result = await self.db.execute(
+        result = await db.execute(
             update(Asset)
             .where(
                 Asset.status == "active",
