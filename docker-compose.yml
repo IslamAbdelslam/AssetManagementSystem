@@ -2,7 +2,7 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
-    command: ["postgres", "-c", "max_connections=500"]
+    command: ["postgres", "-c", "max_connections=1000", "-c", "shared_buffers=1GB", "-c", "work_mem=32MB"]
     environment:
       POSTGRES_USER: darkatlas
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-darkatlas_dev_only}
@@ -37,6 +37,7 @@ services:
       dockerfile: Dockerfile
       target: production
     restart: unless-stopped
+    command: ["gunicorn", "app.main:app", "-w", "10", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--timeout", "120"]
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://darkatlas:${POSTGRES_PASSWORD:-darkatlas_dev_only}@postgres:5432/darkatlas_db

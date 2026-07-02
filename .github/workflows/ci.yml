@@ -62,8 +62,8 @@ jobs:
       - name: Lint (ruff)
         run: ruff check app/ tests/
 
-      - name: Type check (mypy)
-        run: mypy app/ --ignore-missing-imports --no-error-summary
+      - name: Type check (pyrefly)
+        run: pyrefly check
 
       - name: Security scan (bandit)
         run: bandit -r app/ -ll  # fail on HIGH severity

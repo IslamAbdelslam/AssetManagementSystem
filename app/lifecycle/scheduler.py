@@ -17,13 +17,10 @@ async def _mark_stale_job() -> None:
     """Runs hourly: marks assets not seen in STALE_THRESHOLD_DAYS as stale."""
     from app.assets.repository import AssetRepository
     from app.database import get_session_factory
-    import uuid
 
     factory = get_session_factory()
     async with factory() as db:
-        # Use a dummy org_id; mark_all_stale ignores org_id filtering
-        repo = AssetRepository(db, uuid.uuid4())
-        count = await repo.mark_all_stale(settings.STALE_THRESHOLD_DAYS)
+        count = await AssetRepository.mark_all_stale(db, settings.STALE_THRESHOLD_DAYS)
         await db.commit()
         if count:
             log.info("lifecycle.mark_stale.complete", count=count, threshold_days=settings.STALE_THRESHOLD_DAYS)

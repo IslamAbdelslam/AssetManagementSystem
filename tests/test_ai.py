@@ -88,3 +88,35 @@ async def test_summarize_endpoint(client: AsyncClient, auth_headers: dict):
 async def test_nl_query_too_long(client: AsyncClient, auth_headers: dict):
     resp = await client.post("/api/v1/ai/query", json={"query": "x" * 501}, headers=auth_headers)
     assert resp.status_code == 422  # max_length=500
+
+
+async def test_nl_query_expired_certs(client: AsyncClient, auth_headers: dict):
+    """metadata_filter expires=past should only return certs with past expiry dates."""
+    from datetime import date
+    # Create an expired cert
+    await client.post("/api/v1/assets", json={
+        "type": "certificate",
+        "value": "cn=expired.example.com",
+        "source": "scan",
+        "tags": ["prod"],
+        "metadata_": {"issuer": "Let's Encrypt", "expires": "2020-01-01"},
+    }, headers=auth_headers)
+
+    with patch("app.ai.chains.run_nl_query_chain", new_callable=AsyncMock) as mock_chain:
+        from app.ai.schemas import AssetFilterSchema
+        mock_chain.return_value = AssetFilterSchema(
+            type="certificate",
+            tags=["prod"],
+            metadata_filter={"expires": "past"},
+            explanation="Filtering expired production certificates",
+        )
+        resp = await client.post("/api/v1/ai/query", json={
+            "query": "show me all expired certificates on production subdomains"
+        }, headers=auth_headers)
+
+    assert resp.status_code == 200
+    data = resp.json()
+    # All returned certs must have a past expiry date
+    today = date.today().isoformat()
+    for item in data["results"]:
+        assert item["metadata"].get("expires", "9999") < today

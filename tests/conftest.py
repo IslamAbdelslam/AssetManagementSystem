@@ -9,6 +9,7 @@ import os
 import uuid
 from typing import AsyncGenerator
 
+import pytest
 import pytest_asyncio
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -192,6 +193,6 @@ async def org_and_token(client: AsyncClient) -> dict:
     return {"access_token": data["access_token"], "token_type": "bearer"}
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
 def auth_headers(org_and_token: dict) -> dict:
     return {"Authorization": f"Bearer {org_and_token['access_token']}"}

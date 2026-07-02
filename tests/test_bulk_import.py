@@ -36,7 +36,7 @@ async def _run_bulk_sync(auth_headers: dict, records: list):
     from jose import jwt
     token = auth_headers["Authorization"].split(" ")[1]
     payload = jwt.decode(token, get_settings().jwt_public_key, algorithms=[ALGORITHM])
-    await _run_bulk_import(payload.get("org"), str(uuid.uuid4()), records)
+    await _run_bulk_import(str(payload.get("org")), str(uuid.uuid4()), records)
 
 
 async def test_bulk_import_queued(client: AsyncClient, auth_headers: dict):
@@ -94,7 +94,7 @@ async def test_bulk_import_stale_reactivation(client: AsyncClient, auth_headers:
     items = resp.json()["items"]
     assert len(items) >= 1
     # At least one should be active after reactivation
-    assert any(i["value"] == "stale-comeback.com" for i in items)
+    assert any(i["value"] == "stale-comeback.com" and i["status"] == "active" for i in items)
 
 
 async def test_bulk_import_tag_merge(client: AsyncClient, auth_headers: dict):

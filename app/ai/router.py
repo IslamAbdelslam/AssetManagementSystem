@@ -97,7 +97,7 @@ async def summarize(
     """
     repo = AssetRepository(db, current_user.org_id)
     params = PageParams(page=1, page_size=100)
-    assets, _ = await repo.list_assets({}, params)
+    assets, total = await repo.list_assets({}, params)
 
     # Compute counts for response
     counts: dict[str, int] = {}
@@ -106,6 +106,8 @@ async def summarize(
 
     # Provide grounded data to LLM
     asset_json = json.dumps([_serialize_asset(a) for a in assets[:100]], indent=2)
+    if total > 100:
+        asset_json += f"\n\nNote: This is a sample of the first 100 assets out of {total} total assets."
     summary_text = await chains.run_summarize_chain(asset_json, body.focus)
 
     return schemas.SummarizeResponse(

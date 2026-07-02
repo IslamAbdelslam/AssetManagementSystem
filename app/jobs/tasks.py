@@ -38,7 +38,7 @@ def bulk_import_task(
     Processes bulk import records in async chunks.
     Updates progress in Redis after each chunk.
     """
-    return asyncio.get_event_loop().run_until_complete(
+    return asyncio.run(
         _run_bulk_import(org_id, job_id, records)
     )
 
