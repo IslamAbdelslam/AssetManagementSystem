@@ -2,7 +2,6 @@ import pytest
 import json
 from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi import Request
-from starlette.datastructures import Headers
 
 from app.database import get_db
 from app.main import create_app
@@ -22,7 +21,7 @@ async def test_get_db_rollback_on_exception():
     
     with patch("app.database.get_session_factory", return_value=mock_factory):
         gen = get_db()
-        session = await anext(gen)
+        await gen.__anext__()
         
         # Simulate an exception in the route
         with pytest.raises(ValueError, match="Test error"):
@@ -50,11 +49,12 @@ async def test_global_exception_handler():
     if handler is None:
         pytest.fail("Global exception handler not found")
         
+    import typing
     # Call the handler directly
-    response = await handler(request, RuntimeError("Something exploded"))
+    response = await typing.cast(typing.Any, handler)(request, RuntimeError("Something exploded"))
     
     assert response.status_code == 500
-    data = json.loads(response.body)
+    data = json.loads(bytes(response.body))
     assert data["error"] == "internal_error"
     assert data["message"] == "An unexpected error occurred."
     assert data["request_id"] == "test-req-id-123"
