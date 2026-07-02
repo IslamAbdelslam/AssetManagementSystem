@@ -64,6 +64,7 @@ async def test_ingest_record_exception_handling(db_session):
     with patch("app.assets.service.AssetRepository.upsert", side_effect=Exception("DB connection lost")):
         asset, error = await svc.ingest_record(record)
         assert asset is None
+        assert error is not None
         assert "DB connection lost" in error
 
 

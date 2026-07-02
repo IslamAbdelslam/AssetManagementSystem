@@ -1,0 +1,9 @@
+preset = "legacy"
+ignore-missing-imports = [
+    "langsmith.*",
+    "langchain.*",
+    "langchain_google_genai.*",
+    "celery.*",
+    "redis.*",
+    "*",
+]

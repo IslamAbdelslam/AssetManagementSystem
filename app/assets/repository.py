@@ -163,6 +163,8 @@ class AssetRepository:
         )
         result = await self.db.execute(stmt)
         row = result.first()
+        if row is None:
+            raise RuntimeError("Upsert failed: expected RETURNING clause to return a row")
         asset = row[0]
         xmax = row[1]
         # Detect if it was an insert or update via xmax == 0
